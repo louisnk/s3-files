@@ -12,7 +12,7 @@ var s3Files = proxyquire('../s3-files.js', {
 
 // Connect
 t.type(s3Files.s3, undefined);
-s3Files.connect({}); 
+s3Files.connect({});
 t.type(s3Files.s3, 'object');
 
 // Keystream
@@ -50,7 +50,8 @@ t.test('Filestream needs a bucket', function (child) {
   var readStream = { createReadStream: function () { return s; } };
   s3Stub.getObject = function () { return readStream; };
   var cnt = 0;
-  var fileStream = s3Files.createFileStream(keyStream); 
+  var fileStream = s3Files.createFileStream(keyStream);
+
   fileStream.on('data', function (chunk) {
     child.equal(chunk.data.toString(), 'hi');
     if (cnt === 0) child.equal(chunk.path, 'a');
@@ -60,6 +61,34 @@ t.test('Filestream needs a bucket', function (child) {
     }
     cnt++;
   });
+});
+
+t.test('Filestream passes errors back', function (child) {
+  var keyStream2 = s3Files
+    .connect({ bucket: 'bucket' })
+    .createKeyStream('folder/', ['a','b']);
+
+  var fileStream = s3Files.createFileStream(keyStream2);
+  var s = new PassThrough();
+  var readStream = { createReadStream: function () { return s; } };
+
+  s3Stub.getObject = function () { return readStream; };
+
+  var spy = sinon.spy(s3Stub, "getObject");
+
+  fileStream.on('data', function (chunk) {
+    spy.called();
+  });
+
+  fileStream.on('error', function (err) {
+    console.log("got this error - ", err);
+    t.match(err.message, 'hmmm');
+    child.end();
+  });
+
+  s.write('hi');
+  s.emit('error', new Error("hmmm"));
+  t.same(spy.threw(), true);
 });
 
 t.end();
